@@ -1,65 +1,128 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
+import ErrorSplash from "@/components/ErrorSplash";
+import PartyLights from "@/components/PartyLights";
+import { errorPayload, readApiError, type DisplayError } from "@/lib/errors";
+import { saveHostToken } from "@/hooks/useHostToken";
+
+const TITLE_LETTERS = ["K", "T", "V"];
+const LETTER_STAGGER = 0.12;
+const INTRO_DELAY = TITLE_LETTERS.length * LETTER_STAGGER + 0.5;
+
+export default function HomePage() {
+  const router = useRouter();
+  const [joinCode, setJoinCode] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [joinError, setJoinError] = useState<DisplayError | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function createRoom() {
+    setCreating(true);
+    setCreateError(null);
+    setJoinError(null);
+    try {
+      const res = await fetch("/api/rooms", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create room");
+      const room = await res.json();
+      saveHostToken(room.code, room.hostToken);
+      router.push(`/room/${room.code}`);
+    } catch {
+      setCreateError("Could not create a room. Try again.");
+      setCreating(false);
+    }
+  }
+
+  async function joinRoom(e: React.FormEvent) {
+    e.preventDefault();
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setJoinError(null);
+    setCreateError(null);
+    const res = await fetch(`/api/rooms/${code}`);
+    if (!res.ok) {
+      const apiError = await readApiError(res);
+      setJoinError(apiError ?? errorPayload("ROOM_NOT_FOUND"));
+      return;
+    }
+    router.push(`/room/${code}`);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="relative flex-1 flex items-center justify-center overflow-hidden bg-black p-6 text-white">
+      <PartyLights />
+
+      <div className="relative z-10 w-full max-w-sm flex flex-col gap-8 text-center">
+        <div>
+          <h1 className="flex justify-center text-7xl font-bold tracking-tight">
+            {TITLE_LETTERS.map((letter, i) => (
+              <motion.span
+                key={letter + i}
+                initial={{ y: -80, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{
+                  delay: i * LETTER_STAGGER,
+                  type: "spring",
+                  stiffness: 480,
+                  damping: 13,
+                }}
+              >
+                {letter}
+              </motion.span>
+            ))}
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: INTRO_DELAY, duration: 0.5 }}
+            className="mt-2 text-sm text-white/70"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            Open source karaoke.
+          </motion.p>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: INTRO_DELAY, duration: 0.5 }}
+          className="flex flex-col gap-8"
+        >
+          <button
+            onClick={createRoom}
+            disabled={creating}
+            className="w-full rounded-lg bg-white text-black py-3 font-medium transition-colors hover:bg-white/85 disabled:opacity-50"
+          >
+            {creating ? "Creating..." : "Open a room"}
+          </button>
+
+          <div className="flex items-center gap-3 text-white/50 text-xs uppercase">
+            <div className="h-px flex-1 bg-white/30" />
+            or
+            <div className="h-px flex-1 bg-white/30" />
+          </div>
+
+          <form onSubmit={joinRoom} className="flex flex-col gap-3">
+            <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder="Room code"
+              maxLength={8}
+              className="w-full rounded-lg border border-white/20 bg-transparent py-3 px-4 text-center text-lg tracking-widest uppercase placeholder-white/40"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            <button
+              type="submit"
+              className="w-full rounded-lg border border-white/20 py-3 font-medium transition-colors hover:bg-white/10"
+            >
+              Join room
+            </button>
+          </form>
+
+          {createError && <p className="text-sm text-red-400">{createError}</p>}
+          {joinError && <ErrorSplash error={joinError} />}
+        </motion.div>
+      </div>
+    </main>
   );
 }

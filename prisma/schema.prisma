@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  hostToken String   @unique
+  createdAt DateTime @default(now())
+  songs     Song[]
+}
+
+enum SongStatus {
+  CURRENT
+  QUEUED
+  HISTORY
+}
+
+model Song {
+  id        String     @id @default(cuid())
+  roomId    String
+  room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  videoId   String
+  title     String
+  thumbnail String
+  addedBy   Json
+  status    SongStatus
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  playedAt  DateTime?
+
+  @@index([roomId, status, position])
+}
